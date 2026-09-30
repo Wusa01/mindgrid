@@ -77,7 +77,8 @@ function home(){clearT();G=null;const t=S.today.day===dayKey()?S.today.score:0;c
  <div class="stats"><div class="stat"><b>${t}</b><span>Today</span></div><div class="stat"><b>${S.best}</b><span>Best</span></div><div class="stat"><b>${S.streak}</b><span>Day streak</span></div></div>
  <button class="btn alt" onclick="stats()">Your progress</button>
  <button class="btn alt" onclick="settings()">Settings</button>
- <p class="sub" style="text-align:center">Spot the odd dot. 60 seconds. It gets harder as you get better.</p>`}
+ <p class="sub">Training</p><div class="g2"><button class="btn alt" onclick="start(false)">Spot</button><button class="btn alt" onclick="startRecall()">Recall</button></div>
+ <p class="sub" style="text-align:center">Spot: find the odd dot in 60s. Recall: remember where it was. Both get harder as you improve.</p>`}
 function start(daily){if(daily&&S.daily.day===dayKey())return;clearT();
  const seed=daily?[...dayKey()].reduce((a,c)=>a*31+c.charCodeAt(0)|0,7):Date.now();
  G={daily,rand:rng(seed),score:0,combo:0,bestCombo:0,ok:0,tot:0,rtS:0,st:{level:Math.min(S.level,6),acc:.7,spd:.4},left:60,lock:true,t0:0};
@@ -127,6 +128,26 @@ function settings(){const T=(k,l)=>`<div class="row"><span>${l}</span><button cl
  app.innerHTML=`<h1 style="font-size:30px">Settings</h1>${T('sound','Sound')}${T('haptics','Vibration')}<div class="row"><span>Dark mode</span><button class="tog ${S.set.dark===true||(S.set.dark===null&&matchMedia('(prefers-color-scheme:dark)').matches)?'on':''}" onclick="S.set.dark=!(document.documentElement.getAttribute('data-theme')==='dark'||(S.set.dark===null&&matchMedia('(prefers-color-scheme:dark)').matches));save();applyTheme();settings()"></button></div>${T('reduce','Reduce motion')}
  <button class="btn alt" style="color:var(--bad);border-color:var(--bad)" onclick="if(confirm('Delete all progress? This cannot be undone.')){S=JSON.parse(JSON.stringify(def));save();applyTheme();home()}">Reset progress</button><button class="btn alt" onclick="home()">Home</button>`}
 function tg(k){S.set[k]=!S.set[k];save();applyTheme();settings();if(k==='sound')sfx.ok()}
+
+// ---------- RECALL ----------
+function startRecall(){clearT();G={mode:'recall',rand:rng(Date.now()),score:0,lives:3,rounds:0,level:0,t0:Date.now(),lock:true};rround()}
+function rround(){if(!G)return;const r=makeRound(G.level,G.rand),show=Math.max(500,1800-70*G.level);G.r=r;G.lock=true;
+ app.innerHTML=`<div class="top"><span>Score <b id="sc">${G.score}</b></span><span>Lives <b id="lv">${G.lives}</b></span><span>Round <b>${G.rounds+1}</b></span></div><div class="flash" id="fl">Remember the highlighted dot</div><div class="grid" id="gr" style="grid-template-columns:repeat(${r.d.grid},1fr)"></div><button class="link" onclick="quit()">Quit</button>`;
+ const gr=$('gr');let h='';for(let i=0;i<r.n;i++)h+=`<button class="t${i===r.target?' show':''}" data-i="${i}" aria-label="dot"><i${i===r.target?' style="background:var(--acc)"':''}></i></button>`;
+ gr.innerHTML=h;gr.onpointerdown=e=>{const b=e.target.closest('.t');if(b)ranswer(+b.dataset.i)};
+ const t=setTimeout(()=>{if(!G)return;gr.children[r.target].classList.remove('show');gr.children[r.target].firstChild.removeAttribute('style');G.lock=false;flash('Where was it?')},show);timers.push(t)}
+function ranswer(i){if(!G||G.lock)return;G.lock=true;const c=$('gr').children,tg=G.r.target;
+ if(i===tg){c[i].classList.add('ok');sfx.ok();G.score+=2+Math.floor(G.level/2);G.level=clamp(G.level+.7,0,25);flash('Correct')}
+ else{c[i].classList.add('no');c[tg].classList.add('show');sfx.no();G.lives--;G.level=clamp(G.level-.4,0,25);flash('Missed')}
+ G.rounds++;$('sc').textContent=G.score;$('lv').textContent=G.lives;
+ const t=setTimeout(()=>G.lives<=0?rfinish():rround(),i===tg?450:900);timers.push(t)}
+function rfinish(){const g=G;clearT();G=null;sfx.end();const k=dayKey(),y=dayKey(new Date(Date.now()-864e5));
+ if(S.lastDay!==k){S.streak=S.lastDay===y?S.streak+1:1;S.lastDay=k}
+ const nb=g.score>(S.bestRecall||0);if(nb)S.bestRecall=g.score;S.played++;S.secs+=Math.round((Date.now()-g.t0)/1000);
+ S.today={day:k,score:Math.max(S.today.day===k?S.today.score:0,g.score)};save();
+ app.innerHTML=`<div class="res" style="margin-top:6vh"><p class="sub">Recall complete</p><div class="big">${g.score}</div><p class="sub">Score</p>${nb?'<p class="pop" style="color:var(--acc);font-weight:700">New best Recall score</p>':''}</div>
+ <div class="g2"><div class="stat"><b>${g.rounds}</b><span>Rounds</span></div><div class="stat"><b>${Math.round(g.level)}</b><span>Level reached</span></div></div>
+ <button class="btn" onclick="startRecall()">Play again</button><button class="btn alt" onclick="home()">Home</button>`}
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&G&&G.endAt)finish()});
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
 load();applyTheme();home();
